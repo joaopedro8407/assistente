@@ -1,183 +1,108 @@
-const { Client } = require('whatsapp-web.js');
+const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 
 const client = new Client({
+    authStrategy: new LocalAuth(),
     puppeteer: {
         headless: true,
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--no-first-run',
-            '--no-zygote',
-            '--single-process'
-        ]
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
     }
 });
 
-let sessoes = {};
-const TEMPO_RESET = 30 * 60 * 1000; // 30 minutos
+const contatosAtendidos = new Map();
 
-// ================= MENU =================
-
-function menuPrincipal() {
-    return `Olá! Agradecemos seu contato.
-
-Para direcionarmos o atendimento, favor nos informar o assunto:
-
-1 - Orçamento
-2 - Recrutamento / Currículos
-3 - Departamento Pessoal
-4 - Financeiro
-5 - Outros
-
-Digite o número da opção desejada.`;
-}
-
-function menuFinal() {
-    return `
-
-Digite:
-0 - Voltar ao menu principal
-9 - Encerrar atendimento`;
-}
-
-// ================= DIGITAÇÃO HUMANA =================
-
-async function enviarComDigitacao(chat, mensagem) {
-
-    const partes = mensagem.split('\n\n');
-
-    for (let parte of partes) {
-
-        const tempoPorLetra = 60; // velocidade humana
-        const tempoMinimo = 1500;
-        const tempo = Math.max(tempoMinimo, parte.length * tempoPorLetra);
-
-        const interval = setInterval(() => {
-            chat.sendStateTyping();
-        }, 4000);
-
-        await new Promise(resolve => setTimeout(resolve, tempo));
-
-        clearInterval(interval);
-
-        await chat.sendMessage(parte);
-
-        await new Promise(resolve => 
-            setTimeout(resolve, 800 + Math.random() * 1200)
-        );
-    }
-}
-
-// ================= EVENTOS =================
-
-client.on('qr', (qr) => {
-    console.log('\nESCANEIE O QR CODE:\n');
+client.on('qr', qr => {
+    console.log('QR RECEIVED');
     qrcode.generate(qr, { small: true });
 });
 
 client.on('ready', () => {
-    console.log('✅ Bot conectado no Railway!');
+    console.log('Bot está online!');
 });
 
-client.on('message', async (message) => {
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
 
-    // Ignorar grupos
-    if (message.from.includes('@g.us')) return;
+async function enviarMenu(chat) {
+    await chat.sendStateTyping();
+    await delay(3000);
 
-    // Ignorar mensagens próprias
-    if (message.fromMe) return;
+    await chat.sendMessage(
+`Olá! Agradecemos seu contato.
 
-    const numero = message.from;
-    const agora = Date.now();
-    const texto = message.body.trim();
+Para direcionarmos o atendimento, informe o assunto:
 
-    // RESET DE SESSÃO
-    if (!sessoes[numero] || (agora - sessoes[numero].ultimaInteracao) > TEMPO_RESET) {
-        sessoes[numero] = { etapa: "menu", ultimaInteracao: agora };
+1 - Orçamento
+2 - Recrutamento
+3 - Departamento Pessoal
+4 - Financeiro
 
-        const chat = await message.getChat();
-        await enviarComDigitacao(chat, menuPrincipal());
+Digite o número da opção.`
+    );
+}
+
+client.on('message', async msg => {
+
+    if (msg.from.endsWith('@g.us')) return;
+
+    const chat = await msg.getChat();
+    const contato = msg.from;
+    const texto = msg.body.toLowerCase();
+
+    if (!contatosAtendidos.has(contato)) {
+        contatosAtendidos.set(contato, true);
+        await enviarMenu(chat);
         return;
     }
 
-    sessoes[numero].ultimaInteracao = agora;
+    await chat.sendStateTyping();
+    await delay(2500);
 
-    // ================= MENU PRINCIPAL =================
+    if (texto === '1') {
+        await chat.sendMessage(
+`Orçamento:
+Envie sua solicitação detalhada para analisarmos.
 
-    if (sessoes[numero].etapa === "menu") {
-
-        let resposta = "";
-
-        switch (texto) {
-            case "1":
-                resposta = "Para orçamentos, por favor descreva sua solicitação detalhadamente.";
-                break;
-
-            case "2":
-                resposta = `Recrutamento / Currículos
-
-Agradecemos seu interesse em fazer parte do time Hausen.
-
-Envie seu currículo para:
-recrutamento@hausen.eng.br
-
-Telefone:
-(31) 3025-1130`;
-                break;
-
-            case "3":
-                resposta = `Departamento Pessoal
-
-Entre em contato pelo telefone:
-(31) 99619-8611`;
-                break;
-
-            case "4":
-                resposta = `Financeiro
-
-Envie sua mensagem para:
-financeiro@hausen.eng.br`;
-                break;
-
-            case "5":
-                resposta = "Por favor, descreva sua solicitação.";
-                break;
-
-            default:
-                resposta = "Opção inválida.\n\n" + menuPrincipal();
-        }
-
-        resposta += menuFinal();
-        sessoes[numero].etapa = "final";
-
-        const chat = await message.getChat();
-        await enviarComDigitacao(chat, resposta);
-        return;
+Digite 0 para voltar ao menu ou sair para encerrar.`
+        );
     }
 
-    // ================= MENU FINAL =================
+    else if (texto === '2') {
+        await chat.sendMessage(
+`Recrutamento:
+Envie seu currículo para recrutamento@hausen.eng.br
+Telefone: (31) 3025-1130
 
-    if (sessoes[numero].etapa === "final") {
+Digite 0 para voltar ao menu ou sair para encerrar.`
+        );
+    }
 
-        if (texto === "0") {
-            sessoes[numero].etapa = "menu";
-            const chat = await message.getChat();
-            await enviarComDigitacao(chat, menuPrincipal());
-            return;
-        }
+    else if (texto === '3') {
+        await chat.sendMessage(
+`Departamento Pessoal:
+Telefone: (31) 99619-8611
 
-        if (texto === "9") {
-            delete sessoes[numero];
-            const chat = await message.getChat();
-            await enviarComDigitacao(chat, "Atendimento encerrado. Caso precise, estamos à disposição.");
-            return;
-        }
+Digite 0 para voltar ao menu ou sair para encerrar.`
+        );
+    }
 
-        const chat = await message.getChat();
-        await enviarComDigitacao(chat, "Digite 0 para voltar ao menu principal ou 9 para encerrar.");
+    else if (texto === '4') {
+        await chat.sendMessage(
+`Financeiro:
+Envie para financeiro@hausen.eng.br
+
+Digite 0 para voltar ao menu ou sair para encerrar.`
+        );
+    }
+
+    else if (texto === '0') {
+        await enviarMenu(chat);
+    }
+
+    else if (texto === 'sair') {
+        contatosAtendidos.delete(contato);
+        await chat.sendMessage("Atendimento encerrado. Caso precise, envie nova mensagem.");
     }
 
 });
