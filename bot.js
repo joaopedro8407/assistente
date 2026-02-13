@@ -2,115 +2,136 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 
 const client = new Client({
-    authStrategy: new LocalAuth({
-        dataPath: './.wwebjs_auth'
-    }),
+    authStrategy: new LocalAuth(),
     puppeteer: {
         headless: true,
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu',
+            '--no-first-run',
+            '--no-zygote',
+            '--single-process'
+        ]
     }
 });
 
-
-const contatosAtendidos = new Map();
+// Controle de estado por usuário
+const userState = {};
 
 client.on('qr', qr => {
-    console.log('QR RECEIVED');
+    console.log('📲 Escaneie o QR Code abaixo:\n');
     qrcode.generate(qr, { small: true });
 });
 
 client.on('ready', () => {
-    console.log('Bot está online!');
+    console.log('✅ Bot está pronto!');
 });
 
-function delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
+function sendMainMenu(message) {
+    userState[message.from] = "main";
+    message.reply(
+`📋 *MENU PRINCIPAL*
 
-async function enviarMenu(chat) {
-    await chat.sendStateTyping();
-    await delay(3000);
+1️⃣ - Suporte  
+2️⃣ - Financeiro  
+3️⃣ - Informações  
 
-    await chat.sendMessage(
-`Olá! Agradecemos seu contato.
-
-Para direcionarmos o atendimento, informe o assunto:
-
-1 - Orçamento
-2 - Recrutamento
-3 - Departamento Pessoal
-4 - Financeiro
-
-Digite o número da opção.`
+Digite o número da opção desejada.`
     );
 }
 
-client.on('message', async msg => {
+client.on('message', async message => {
+    const msg = message.body.toLowerCase();
 
-    if (msg.from.endsWith('@g.us')) return;
-
-    const chat = await msg.getChat();
-    const contato = msg.from;
-    const texto = msg.body.toLowerCase();
-
-    if (!contatosAtendidos.has(contato)) {
-        contatosAtendidos.set(contato, true);
-        await enviarMenu(chat);
-        return;
+    // Sempre permitir voltar ao menu
+    if (msg === "menu") {
+        return sendMainMenu(message);
     }
 
-    await chat.sendStateTyping();
-    await delay(2500);
+    if (!userState[message.from]) {
+        return sendMainMenu(message);
+    }
 
-    if (texto === '1') {
-        await chat.sendMessage(
-`Orçamento:
-Envie sua solicitação detalhada para analisarmos.
+    // ===== MENU PRINCIPAL =====
+    if (userState[message.from] === "main") {
 
-Digite 0 para voltar ao menu ou sair para encerrar.`
+        if (msg === "1") {
+            userState[message.from] = "suporte";
+            return message.reply(
+`🛠 *SUPORTE*
+
+1️⃣ - Problemas técnicos  
+2️⃣ - Falar com atendente  
+
+0️⃣ - Voltar ao menu`
+            );
+        }
+
+        if (msg === "2") {
+            userState[message.from] = "financeiro";
+            return message.reply(
+`💰 *FINANCEIRO*
+
+1️⃣ - Segunda via de boleto  
+2️⃣ - Informações de pagamento  
+
+0️⃣ - Voltar ao menu`
+            );
+        }
+
+        if (msg === "3") {
+            return message.reply("ℹ️ Somos uma empresa especializada em soluções digitais 🚀");
+        }
+    }
+
+    // ===== SUBMENU SUPORTE =====
+    if (userState[message.from] === "suporte") {
+
+        if (msg === "1") {
+            userState[message.from] = "problema_tecnico";
+            return message.reply("🔧 Descreva seu problema técnico:");
+        }
+
+        if (msg === "2") {
+            return message.reply("👨‍💻 Um atendente entrará em contato em breve.");
+        }
+
+        if (msg === "0") {
+            return sendMainMenu(message);
+        }
+    }
+
+    // ===== PERGUNTA PROBLEMA TÉCNICO =====
+    if (userState[message.from] === "problema_tecnico") {
+        userState[message.from] = "main";
+        return message.reply(
+`📩 Obrigado por descrever o problema:
+
+"${message.body}"
+
+Nossa equipe irá analisar e responder em breve.
+
+Digite *menu* para voltar ao início.`
         );
     }
 
-    else if (texto === '2') {
-        await chat.sendMessage(
-`Recrutamento:
-Envie seu currículo para recrutamento@hausen.eng.br
-Telefone: (31) 3025-1130
+    // ===== SUBMENU FINANCEIRO =====
+    if (userState[message.from] === "financeiro") {
 
-Digite 0 para voltar ao menu ou sair para encerrar.`
-        );
+        if (msg === "1") {
+            return message.reply("📄 A segunda via será enviada para seu e-mail cadastrado.");
+        }
+
+        if (msg === "2") {
+            return message.reply("💳 Aceitamos PIX, cartão e boleto.");
+        }
+
+        if (msg === "0") {
+            return sendMainMenu(message);
+        }
     }
-
-    else if (texto === '3') {
-        await chat.sendMessage(
-`Departamento Pessoal:
-Telefone: (31) 99619-8611
-
-Digite 0 para voltar ao menu ou sair para encerrar.`
-        );
-    }
-
-    else if (texto === '4') {
-        await chat.sendMessage(
-`Financeiro:
-Envie para financeiro@hausen.eng.br
-
-Digite 0 para voltar ao menu ou sair para encerrar.`
-        );
-    }
-
-    else if (texto === '0') {
-        await enviarMenu(chat);
-    }
-
-    else if (texto === 'sair') {
-        contatosAtendidos.delete(contato);
-        await chat.sendMessage("Atendimento encerrado. Caso precise, envie nova mensagem.");
-    }
-
 });
 
 client.initialize();
-
-
