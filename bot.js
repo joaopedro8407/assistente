@@ -10,7 +10,6 @@ const client = new Client({
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
             '--disable-gpu',
-            '--no-first-run',
             '--no-zygote',
             '--single-process'
         ]
@@ -28,7 +27,7 @@ client.on('ready', () => {
 
 client.on('message', message => {
     if (message.body.toLowerCase() === 'oi') {
-        message.reply('Olá 👋 Estou rodando no Koyeb 🚀');
+        message.reply('Olá 👋 Estou rodando via Docker no Koyeb 🚀');
     }
 });
 

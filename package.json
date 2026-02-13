@@ -1,15 +1,13 @@
 {
   "name": "whatsapp-bot",
   "version": "1.0.0",
-  "description": "WhatsApp bot for Koyeb",
+  "description": "WhatsApp bot Docker",
   "main": "bot.js",
   "scripts": {
-    "start": "node bot.js",
-    "postinstall": "npx puppeteer browsers install chrome"
+    "start": "node bot.js"
   },
   "dependencies": {
     "whatsapp-web.js": "^1.23.0",
-    "puppeteer": "^22.15.0",
     "qrcode-terminal": "^0.12.0"
   }
 }
