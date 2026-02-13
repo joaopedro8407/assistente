@@ -7,8 +7,8 @@ const client = new Client({
     }),
     puppeteer: {
         headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
     }
 });
 
@@ -112,4 +112,5 @@ Digite 0 para voltar ao menu ou sair para encerrar.`
 });
 
 client.initialize();
+
 
